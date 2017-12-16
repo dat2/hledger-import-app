@@ -1,0 +1,24 @@
+{
+  "name": "csv-downloader",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "pretty": "prettier --single-quote --write *.js"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bluebird": "^3.5.1",
+    "commander": "^2.11.0",
+    "inquirer": "^3.3.0",
+    "json2csv": "^3.11.5",
+    "moment": "^2.19.1",
+    "properties": "^1.2.1",
+    "puppeteer": "^0.12.0",
+    "yup": "^0.23.0"
+  },
+  "devDependencies": {
+    "prettier": "^1.7.4"
+  }
+}
