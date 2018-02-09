@@ -3,5 +3,5 @@ module.exports = {
   lastpass_website: 'scotiabank[nick]',
   account_name: 'assets:chequing',
   account_type: 'chequing',
-  filename: './imports/assets-chequing.csv'
+  filename: '~/Dropbox/PersonalFinance/imports/assets-chequing.csv'
 };
