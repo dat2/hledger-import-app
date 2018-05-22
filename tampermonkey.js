@@ -40,11 +40,11 @@ var inline_src = (<><![CDATA[
 
     function createCsvRow(node) {
         return {
-            date: dateFns.format(dateFns.parse(node.children[0].textContent), 'M/D/YY'),
+            date: dateFns.format(dateFns.parse(node.children[0].textContent), 'M/D/YYYY'),
             amount: getAmount(node.children[3].textContent, node.children[4].textContent),
             nothing: '-',
-            desc: node.children[2].textContent.trim(),
-            desc2: ''
+            desc: '',
+            desc2: node.children[2].textContent.trim()
         };
     }
 

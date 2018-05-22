@@ -8,7 +8,7 @@ def convert_filename_to_account(filename):
   return splitext(filename)[0].replace('-', ':')
 
 def reformat_date(date_str):
-  date = datetime.strptime(date_str, '%m/%d/%y')
+  date = datetime.strptime(date_str, '%m/%d/%Y')
   return date.strftime('%Y/%m/%d')
 
 def clean_row(row, account_name):
