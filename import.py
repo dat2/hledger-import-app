@@ -15,12 +15,14 @@ def reformat_date(date_str):
 
 
 def clean_row(row, account_name):
-    row[0] = reformat_date(row[0])
-    row[1] = float(row[1])
-    row[2] = account_name
-    row[4] = row[4].strip()
-    row[5] = row[5].strip()
-    return row
+    old_date, description, out_amt, in_amt, _ = row
+    return [
+        reformat_date(old_date),
+        -float(out_amt) if out_amt else float(in_amt),
+        account_name,
+        '',
+        description.strip(),
+    ]
 
 
 def clean_input_files():
