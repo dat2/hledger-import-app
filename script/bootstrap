@@ -6,5 +6,3 @@ pyenv update
 pyenv install --skip-existing || return
 test -d venv || python3 -m venv venv || return
 . venv/bin/activate
-
-pip install -r requirements.txt -r requirements_dev.txt
