@@ -1,8 +1,10 @@
 # Based on conventions from https://github.com/github/scripts-to-rule-them-all
 # script/bootstrap: Resolve all dependencies that the application requires to
 # run.
+#
+VENV=.venv
 
-pyenv update
 pyenv install --skip-existing || return
-test -d venv || python3 -m venv venv || return
-. venv/bin/activate
+test -d $VENV || python3 -m venv $VENV || return
+$VENV/bin/pip install -e ".[dev]"
+. $VENV/bin/activate

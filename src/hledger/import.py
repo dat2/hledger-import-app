@@ -20,7 +20,7 @@ def clean_row(row, account_name):
         reformat_date(old_date),
         -float(out_amt) if out_amt else float(in_amt),
         account_name,
-        '',
+        "",
         description.strip(),
     ]
 
@@ -84,7 +84,3 @@ def main():
     aggregate_cleaned_files()
     hledger_read_aggregated_file()
     output_last_imported(accounts)
-
-
-if __name__ == "__main__":
-    main()
