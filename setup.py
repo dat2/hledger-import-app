@@ -15,10 +15,10 @@ if __name__ == "__main__":
         entry_points={
             "console_scripts": [
                 "hledger-import=hledger.import:main",
-                "plaid-import=plaid_import.plaid_import:main",
+                "plaid-import=plaid_import.plaid_import:cli",
             ]
         },
-        install_requires=["plaid-python", "python-dotenv", "tqdm"],
+        install_requires=["click", "plaid-python", "python-dotenv", "toml", "tqdm"],
         extras_require={"dev": ["black", "invoke", "isort"]},
         zip_safe=False,
         classifiers=[

@@ -4,20 +4,24 @@ import sys
 from datetime import datetime
 from os import environ
 
+import click
+import toml
 from dotenv import load_dotenv
 from plaid import Client
 from tqdm import tqdm
 
 
-def fetch_plaid_transactions(access_token):
-    client = Client(
+def _get_plaid_client():
+    return Client(
         client_id=environ["PLAID_CLIENT_ID"],
         secret=environ["PLAID_SECRET"],
         public_key=environ["PLAID_PUBLIC_KEY"],
         environment=environ["PLAID_ENV"],
     )
 
-    start_date = "2019-01-01"
+
+def fetch_plaid_transactions(access_token, start_date):
+    client = _get_plaid_client()
     end_date = datetime.today().strftime("%Y-%m-%d")
 
     response = client.Transactions.get(
@@ -41,31 +45,31 @@ def fetch_plaid_transactions(access_token):
     return {"accounts": accounts, "transactions": transactions}
 
 
-def write_plaid_transactions(data):
-    with open("data.json", "w") as stream:
-        stream.write(json.dumps(data))
+def save_db(data):
+    with open("db.json", "w") as stream:
+        json.dump(data, stream)
 
 
-def load_plaid_transactions():
-    with open("data.json", "r") as stream:
+def load_db():
+    with open("db.json", "r") as stream:
         return json.load(stream)
 
 
 def execute_rules(rules, hledger_transaction):
     for rule in rules:
         if rule["pattern"].search(hledger_transaction["description"]):
-            for key, value in rule["set"].items():
+            for key, value in rule["then"].items():
                 if key.startswith("account"):
                     hledger_transaction[key]["name"] = value
     return hledger_transaction
 
 
-def convert_to_hledger_transaction(db, transaction):
+def convert_to_hledger_transaction(config, transaction):
     hledger_transaction = {}
     hledger_transaction["date"] = transaction["date"]
     hledger_transaction["description"] = transaction["name"]
     hledger_transaction["account1"] = {
-        "name": db["accounts"][transaction["account_id"]],
+        "name": config["accounts"][transaction["account_id"]],
         "amount": transaction["amount"],
     }
     hledger_transaction["account2"] = {
@@ -90,31 +94,60 @@ def print_transaction_to_hledger(transaction):
     date = transaction["date"]
     description = transaction["description"]
 
-    print(f"{date} {description}")
+    click.echo(f"{date} {description}")
 
     accounts = [transaction[key] for key in transaction if key.startswith("account")]
     for account, length_spaces in zip(accounts, _get_length_spacing(accounts)):
         account_name = account["name"]
         amount = account["amount"]
-        print(f"    {account_name}{' ' * length_spaces}    {amount}")
-    print()
+        click.echo(f"    {account_name}{' ' * length_spaces}    {amount}")
+    click.echo()
 
 
-def main():
+def get_date_from_transaction(transaction):
+    return datetime.strptime(transaction["date"], "%Y-%m-%d")
+
+
+@click.group()
+def cli():
+    """
+    Fetch transactions from plaid and print them into an hledger format.
+    This will also allow you to match against transaction descriptions and assign
+    them to hledger accounts automatically.
+    """
     load_dotenv()
 
-    with open("db.json", "r") as db_file:
-        db = json.load(db_file)
 
-    # access_token = environ["PLAID_ACCESS_TOKEN"]
-    # data = fetch_plaid_transactions(access_token)
-    # write_plaid_transactions(data)
-    data = load_plaid_transactions()
+def start_date_option():
+    return click.option(
+        "-s",
+        "--start",
+        "start_date",
+        type=click.DateTime(formats=["%Y-%m-%d"]),
+        required=False,
+        help="Date to start fetching transactions from.",
+    )
 
-    for transaction in sorted(
-        data["transactions"], key=lambda t: datetime.strptime(t["date"], "%Y-%m-%d")
-    ):
-        account1 = db["accounts"].get(transaction["account_id"])
+
+@cli.command(name="print")
+@start_date_option()
+def print_(start_date=None):
+    """
+    Print the transactions in hledger format.
+    """
+    with open("config.toml", "r") as config_file:
+        config = toml.load(config_file)
+
+    data = load_db()
+
+    transactions = sorted(data["transactions"], key=get_date_from_transaction)
+    if start_date is not None:
+        transactions = [
+            t for t in transactions if get_date_from_transaction(t) >= start_date
+        ]
+
+    for transaction in transactions:
+        account1 = config["accounts"].get(transaction["account_id"])
         if account1 is None:
             transaction_id = transaction["transaction_id"]
             account_name = data["accounts"][transaction["account_id"]]["name"]
@@ -124,10 +157,38 @@ def main():
             )
             continue
         precompiled_rules = [
-            {"pattern": re.compile(rule["match"], re.I), "set": rule["set"]}
-            for rule in db["rules"]
+            {"pattern": re.compile(rule["if"], re.I), "then": rule["then"]}
+            for rule in config["rules"]
         ]
-        hledger_transaction = convert_to_hledger_transaction(db, transaction)
+        hledger_transaction = convert_to_hledger_transaction(config, transaction)
         result = execute_rules(precompiled_rules, hledger_transaction)
         print_transaction_to_hledger(result)
-        db["transactions_imported"].append(transaction["transaction_id"])
+
+
+@cli.command()
+@start_date_option()
+def fetch(start_date=None):
+    """
+    Fetch the latest data from plaid.
+    """
+    db = load_db()
+    if start_date is None:
+        start_date = max(db["transactions"], key=get_date_from_transaction)["date"]
+    imported_transaction_ids = set([t["transaction_id"] for t in db["transactions"]])
+    data = fetch_plaid_transactions(environ["PLAID_ACCESS_TOKEN"], start_date)
+    db["accounts"] = {**db["accounts"], **data["accounts"]}
+    db["transactions"].extend(
+        [
+            transaction
+            for transaction in data["transactions"]
+            if transaction["transaction_id"] not in imported_transaction_ids
+        ]
+    )
+    save_db(db)
+
+
+@cli.command()
+def create_public_token():
+    access_token = environ["PLAID_ACCESS_TOKEN"]
+    client = _get_plaid_client()
+    click.echo(client.Item.public_token.create(access_token))
