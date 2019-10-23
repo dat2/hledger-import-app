@@ -1,0 +1,27 @@
+<html>
+    <head>
+        <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    </head>
+    <body>
+        <button id="link-button">Link Account</button>
+        <script>
+        // Initialize Link with the token parameter
+        // set to the generated public_token for the Item
+        var linkHandler = Plaid.create({
+            env: 'development',
+            clientName: 'Plaid Import',
+            key: '1ac36ff57daadd014f8c528d2b6e6d',
+            product: ['transactions'],
+            token: 'public-development-1ebdd1ca-8011-489b-a414-5c2ec75f49b5',
+        });
+
+        // Trigger the authentication view
+        document.getElementById('link-button').onclick = function() {
+            // Link will automatically detect the institution ID
+            // associated with the public token and present the
+            // credential view to your user.
+            linkHandler.open();
+        };
+        </script>
+    </body>
+</html>

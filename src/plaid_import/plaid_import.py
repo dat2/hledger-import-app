@@ -3,12 +3,14 @@ import re
 import sys
 from datetime import datetime
 from os import environ
+from pathlib import Path
 
 import click
 import toml
+from tqdm import tqdm
+
 from dotenv import load_dotenv
 from plaid import Client
-from tqdm import tqdm
 
 
 def _get_plaid_client():
@@ -20,38 +22,45 @@ def _get_plaid_client():
     )
 
 
-def fetch_plaid_transactions(access_token, start_date):
+def fetch_plaid_transactions(start_date):
     client = _get_plaid_client()
     end_date = datetime.today().strftime("%Y-%m-%d")
 
-    response = client.Transactions.get(
-        access_token, start_date=start_date, end_date=end_date
-    )
-    accounts = {account["account_id"]: account for account in response["accounts"]}
-    total = response["total_transactions"]
-    transactions = response["transactions"]
+    for access_token in environ["PLAID_ACCESS_TOKENS"].split(","):
+        response = client.Transactions.get(
+            access_token, start_date=start_date, end_date=end_date
+        )
+        accounts = {account["account_id"]: account for account in response["accounts"]}
+        total = response["total_transactions"]
+        transactions = response["transactions"]
 
-    with tqdm(total=total) as pbar:
-        pbar.update(len(transactions))
-        while len(transactions) < total:
-            response = client.Transactions.get(
-                access_token,
-                start_date=start_date,
-                end_date=end_date,
-                offset=len(transactions),
-            )
-            transactions.extend(response["transactions"])
-            pbar.update(len(response["transactions"]))
+        with tqdm(total=total) as pbar:
+            pbar.update(len(transactions))
+            while len(transactions) < total:
+                response = client.Transactions.get(
+                    access_token,
+                    start_date=start_date,
+                    end_date=end_date,
+                    offset=len(transactions),
+                )
+                transactions.extend(response["transactions"])
+                pbar.update(len(response["transactions"]))
+
+    len_pending = sum(1 for t in transactions if t["pending"])
+    click.echo(f"Skipped {len_pending} pending transactions.")
+    transactions = [t for t in transactions if not t["pending"]]
     return {"accounts": accounts, "transactions": transactions}
 
 
 def save_db(data):
-    with open("db.json", "w") as stream:
+    db_path = Path.home() / ".plaid-import" / "db.json"
+    with open(str(db_path), "w") as stream:
         json.dump(data, stream)
 
 
 def load_db():
-    with open("db.json", "r") as stream:
+    db_path = Path.home() / ".plaid-import" / "db.json"
+    with open(str(db_path), "r") as stream:
         return json.load(stream)
 
 
@@ -70,11 +79,11 @@ def convert_to_hledger_transaction(config, transaction):
     hledger_transaction["description"] = transaction["name"]
     hledger_transaction["account1"] = {
         "name": config["accounts"][transaction["account_id"]],
-        "amount": transaction["amount"],
+        "amount": -transaction["amount"],
     }
     hledger_transaction["account2"] = {
         "name": "expenses:unknown",
-        "amount": -transaction["amount"],
+        "amount": transaction["amount"],
     }
     return hledger_transaction
 
@@ -100,7 +109,7 @@ def print_transaction_to_hledger(transaction):
     for account, length_spaces in zip(accounts, _get_length_spacing(accounts)):
         account_name = account["name"]
         amount = account["amount"]
-        click.echo(f"    {account_name}{' ' * length_spaces}    {amount}")
+        click.echo(f"    {account_name}{' ' * length_spaces}    {amount:.2f}")
     click.echo()
 
 
@@ -123,7 +132,7 @@ def start_date_option():
         "-s",
         "--start",
         "start_date",
-        type=click.DateTime(formats=["%Y-%m-%d"]),
+        type=click.DateTime(formats=["%Y-%m-%d", "%Y/%m/%d"]),
         required=False,
         help="Date to start fetching transactions from.",
     )
@@ -172,10 +181,12 @@ def fetch(start_date=None):
     Fetch the latest data from plaid.
     """
     db = load_db()
-    if start_date is None:
+    if start_date is None and db["transactions"]:
         start_date = max(db["transactions"], key=get_date_from_transaction)["date"]
-    imported_transaction_ids = set([t["transaction_id"] for t in db["transactions"]])
-    data = fetch_plaid_transactions(environ["PLAID_ACCESS_TOKEN"], start_date)
+    else:
+        start_date = datetime.now().replace(day=1, month=1).strftime("%Y-%m-%d")
+    imported_transaction_ids = {t["transaction_id"] for t in db["transactions"]}
+    data = fetch_plaid_transactions(start_date)
     db["accounts"] = {**db["accounts"], **data["accounts"]}
     db["transactions"].extend(
         [
@@ -188,7 +199,14 @@ def fetch(start_date=None):
 
 
 @cli.command()
-def create_public_token():
-    access_token = environ["PLAID_ACCESS_TOKEN"]
+@click.argument("access_token")
+def create_public_token(access_token):
     client = _get_plaid_client()
     click.echo(client.Item.public_token.create(access_token))
+
+
+@cli.command()
+@click.argument("public_token")
+def create_access_token(public_token):
+    client = _get_plaid_client()
+    click.echo(client.Item.public_token.exchange(public_token))

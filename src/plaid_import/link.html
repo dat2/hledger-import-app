@@ -1,0 +1,26 @@
+<html>
+    <head>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/2.2.3/jquery.min.js"></script>
+        <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    </head>
+    <body>
+        <button id="link-button">Link Account</button>
+        <script type="text/javascript">
+            (function($) {
+                var handler = Plaid.create({
+                    clientName: 'Plaid Quickstart',
+                    env: 'development',
+                    key: '1ac36ff57daadd014f8c528d2b6e6d',
+                    product: ['transactions'],
+                    onSuccess: function(public_token, metadata) {
+                        console.log(public_token);
+                    },
+                });
+
+                $('#link-button').on('click', function(e) {
+                    handler.open();
+                });
+            })(jQuery);
+        </script>
+    </body>
+</html>
