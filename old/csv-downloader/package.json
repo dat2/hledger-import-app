@@ -15,7 +15,7 @@
     "json2csv": "^3.11.5",
     "moment": "^2.19.1",
     "properties": "^1.2.1",
-    "puppeteer": "^0.12.0",
+    "puppeteer": "^1.13.0",
     "yup": "^0.23.0"
   },
   "devDependencies": {
